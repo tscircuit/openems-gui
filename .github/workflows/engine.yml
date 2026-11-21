@@ -1,0 +1,67 @@
+# Builds the self-contained openEMS engine bundles the desktop app downloads and
+# publishes them on a prerelease named after the tag in server/engine-release.ts.
+#
+# Run it manually (Actions -> Engine bundles -> Run workflow) after changing
+# engine/build-engine.sh or bumping ENGINE_RELEASE_TAG.
+name: Engine bundles
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Upload the bundles to the engine release"
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - "engine/build-engine.sh"
+      - "engine/prune-engine.py"
+      - ".github/workflows/engine.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: darwin-arm64, runner: macos-14 }
+          - { platform: darwin-x64, runner: macos-15-intel }
+          - { platform: linux-x64, runner: ubuntu-22.04 }
+          - { platform: linux-arm64, runner: ubuntu-22.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, smoke-test and pack
+        run: engine/build-engine.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openems-engine-${{ matrix.platform }}
+          path: dist-engine/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-engine
+          merge-multiple: true
+      - name: Upload to the engine release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(sed -n 's/^export const ENGINE_RELEASE_TAG = "\(.*\)"$/\1/p' server/engine-release.ts)"
+          test -n "$tag"
+          gh release view "$tag" >/dev/null 2>&1 ||
+            gh release create "$tag" --prerelease --title "openEMS engine ($tag)" \
+              --notes "Prebuilt, self-contained openEMS engine bundles downloaded by the openEMS GUI desktop app. Not an app release."
+          gh release upload "$tag" dist-engine/* --clobber

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d3a26"/>
+      <stop offset="1" stop-color="#0d1a12"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <!-- mesh -->
+  <g stroke="#ffffff" stroke-opacity="0.09" stroke-width="6">
+    <path d="M192 64V960M320 64V960M448 64V960M576 64V960M704 64V960M832 64V960"/>
+    <path d="M64 192H960M64 320H960M64 448H960M64 576H960M64 704H960M64 832H960"/>
+  </g>
+  <!-- inverted-F antenna trace -->
+  <g fill="none" stroke="#d2553f" stroke-width="56" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M250 760V330H774"/>
+    <path d="M410 760V330"/>
+  </g>
+  <rect x="180" y="740" width="664" height="64" rx="16" fill="#4a86d8"/>
+  <!-- radiated wavefronts -->
+  <g fill="none" stroke="#f2c230" stroke-width="30" stroke-linecap="round">
+    <path d="M560 250a120 120 0 0 1 170 0" />
+    <path d="M500 180a205 205 0 0 1 290 0" opacity="0.6"/>
+  </g>
+  <circle cx="410" cy="760" r="44" fill="#f2c230"/>
+</svg>

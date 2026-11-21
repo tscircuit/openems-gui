@@ -1,0 +1,11 @@
+node_modules
+jobs
+dist
+release
+openems-engine
+openems-engine.staging
+downloads
+settings.json
+.engine-build
+dist-engine
+.DS_Store

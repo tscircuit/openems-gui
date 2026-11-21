@@ -1,0 +1,316 @@
+[
+ {
+  "type": "source_project_metadata",
+  "source_project_metadata_id": "source_project_metadata_0",
+  "software_used_string": "@tscircuit/core@0.0.2341"
+ },
+ {
+  "type": "source_group",
+  "source_group_id": "source_group_0",
+  "is_subcircuit": true,
+  "was_automatically_named": true,
+  "subcircuit_id": "subcircuit_source_group_0"
+ },
+ {
+  "type": "source_port",
+  "source_port_id": "source_port_0",
+  "name": "pin1",
+  "pin_number": 1,
+  "port_hints": [
+   "pin1",
+   "1"
+  ],
+  "source_component_id": "source_component_0",
+  "subcircuit_id": "subcircuit_source_group_0"
+ },
+ {
+  "type": "source_component",
+  "source_component_id": "source_component_0",
+  "ftype": "simple_chip",
+  "name": "ANT1",
+  "source_group_id": "source_group_0"
+ },
+ {
+  "type": "source_net",
+  "source_net_id": "source_net_0",
+  "name": "GND",
+  "member_source_group_ids": [],
+  "is_ground": true,
+  "is_power": false,
+  "is_positive_voltage_source": false,
+  "subcircuit_id": "subcircuit_source_group_0",
+  "subcircuit_connectivity_map_key": "unnamedsubcircuitsubcircuit_source_group_0_connectivity_net0"
+ },
+ {
+  "type": "source_board",
+  "source_board_id": "source_board_0",
+  "source_group_id": "source_group_0"
+ },
+ {
+  "type": "source_component_pins_underspecified_warning",
+  "source_component_pins_underspecified_warning_id": "source_component_pins_underspecified_warning_0",
+  "source_component_id": "source_component_0",
+  "source_port_ids": [
+   "source_port_0"
+  ],
+  "subcircuit_id": "subcircuit_source_group_0",
+  "warning_type": "source_component_pins_underspecified_warning",
+  "message": "All pins on ANT1 are underspecified (no pinAttributes set)"
+ },
+ {
+  "type": "schematic_component",
+  "schematic_component_id": "schematic_component_0",
+  "center": {
+   "x": 0,
+   "y": 0
+  },
+  "rotation": 0,
+  "size": {
+   "width": 0.4,
+   "height": 0.4
+  },
+  "pin_spacing": 0.2,
+  "port_labels": {},
+  "source_component_id": "source_component_0",
+  "schematic_group_id": "schematic_group_0"
+ },
+ {
+  "type": "schematic_text",
+  "schematic_text_id": "schematic_text_0",
+  "text": "",
+  "schematic_component_id": "schematic_component_0",
+  "anchor": "left",
+  "rotation": 0,
+  "position": {
+   "x": -0.2,
+   "y": -0.33
+  },
+  "color": "#006464",
+  "font_size": 0.18
+ },
+ {
+  "type": "schematic_text",
+  "schematic_text_id": "schematic_text_1",
+  "text": "ANT1",
+  "schematic_component_id": "schematic_component_0",
+  "anchor": "left",
+  "rotation": 0,
+  "position": {
+   "x": -0.2,
+   "y": 0.33
+  },
+  "color": "#006464",
+  "font_size": 0.18
+ },
+ {
+  "type": "schematic_group",
+  "schematic_group_id": "schematic_group_0",
+  "is_subcircuit": true,
+  "subcircuit_id": "subcircuit_source_group_0",
+  "name": "unnamed_board1",
+  "center": {
+   "x": 0,
+   "y": 0
+  },
+  "width": 0,
+  "height": 0,
+  "schematic_component_ids": [],
+  "source_group_id": "source_group_0",
+  "show_as_schematic_box": false
+ },
+ {
+  "type": "schematic_port",
+  "schematic_port_id": "schematic_port_0",
+  "schematic_component_id": "schematic_component_0",
+  "center": {
+   "x": -0.6000000000000001,
+   "y": 0
+  },
+  "source_port_id": "source_port_0",
+  "facing_direction": "left",
+  "distance_from_component_edge": 0.4,
+  "side_of_component": "left",
+  "pin_number": 1,
+  "true_ccw_index": 0,
+  "is_connected": false
+ },
+ {
+  "type": "schematic_missing_sheet_warning",
+  "schematic_missing_sheet_warning_id": "schematic_missing_sheet_warning_0",
+  "warning_type": "schematic_missing_sheet_warning",
+  "message": "No <schematicsheet> was found. Add a <schematicsheet> to define the schematic drawing area."
+ },
+ {
+  "type": "pcb_component",
+  "pcb_component_id": "pcb_component_0",
+  "footprint_origin": {
+   "x": 0,
+   "y": 0
+  },
+  "center": {
+   "x": 0,
+   "y": 0
+  },
+  "width": 29,
+  "height": 38,
+  "layer": "top",
+  "rotation": 0,
+  "source_component_id": "source_component_0",
+  "subcircuit_id": "subcircuit_source_group_0",
+  "do_not_place": false,
+  "obstructs_within_bounds": true,
+  "is_allowed_to_be_off_board": false,
+  "position_mode": "relative_to_group_anchor",
+  "positioned_relative_to_pcb_board_id": "pcb_board_0",
+  "display_offset_x": "0mm",
+  "display_offset_y": "0mm"
+ },
+ {
+  "type": "pcb_board",
+  "pcb_board_id": "pcb_board_0",
+  "source_board_id": "source_board_0",
+  "subcircuit_id": "subcircuit_source_group_0",
+  "center": {
+   "x": 0,
+   "y": 0
+  },
+  "thickness": 1.6,
+  "num_layers": 2,
+  "width": 60,
+  "height": 60,
+  "material": "fr4",
+  "min_trace_width": 0.1,
+  "min_via_hole_diameter": 0.2,
+  "min_via_pad_diameter": 0.3,
+  "min_via_hole_edge_to_via_hole_edge_clearance": 0.1,
+  "min_trace_to_hole_edge_clearance": 0.2,
+  "min_trace_to_pad_edge_clearance": 0.1,
+  "min_pad_edge_to_pad_edge_clearance": 0.1,
+  "min_plated_hole_drill_edge_to_drill_edge_clearance": 0.15,
+  "min_board_edge_clearance": 0.2
+ },
+ {
+  "type": "pcb_smtpad",
+  "pcb_smtpad_id": "pcb_smtpad_0",
+  "pcb_component_id": "pcb_component_0",
+  "pcb_port_id": "pcb_port_0",
+  "layer": "top",
+  "shape": "rect",
+  "width": 29,
+  "height": 38,
+  "port_hints": [
+   "pin1"
+  ],
+  "is_covered_with_solder_mask": false,
+  "x": 0,
+  "y": 0,
+  "subcircuit_id": "subcircuit_source_group_0"
+ },
+ {
+  "type": "pcb_solder_paste",
+  "pcb_solder_paste_id": "pcb_solder_paste_0",
+  "layer": "top",
+  "shape": "rect",
+  "width": 20.299999999999997,
+  "height": 26.599999999999998,
+  "x": 0,
+  "y": 0,
+  "pcb_component_id": "pcb_component_0",
+  "pcb_smtpad_id": "pcb_smtpad_0",
+  "subcircuit_id": "subcircuit_source_group_0"
+ },
+ {
+  "type": "pcb_port",
+  "pcb_port_id": "pcb_port_0",
+  "pcb_component_id": "pcb_component_0",
+  "layers": [
+   "top"
+  ],
+  "subcircuit_id": "subcircuit_source_group_0",
+  "x": 0,
+  "y": 0,
+  "source_port_id": "source_port_0"
+ },
+ {
+  "type": "cad_component",
+  "cad_component_id": "cad_component_0",
+  "position": {
+   "x": 0,
+   "y": 0,
+   "z": 0.8
+  },
+  "rotation": {
+   "x": 0,
+   "y": 0,
+   "z": 0
+  },
+  "pcb_component_id": "pcb_component_0",
+  "source_component_id": "source_component_0",
+  "model_origin_alignment": "center_of_component_on_board_surface",
+  "anchor_alignment": "center_of_component_on_board_surface",
+  "show_as_bounding_box": true
+ },
+ {
+  "type": "source_missing_manufacturer_part_number_warning",
+  "source_missing_manufacturer_part_number_warning_id": "source_missing_manufacturer_part_number_warning_0",
+  "source_component_id": "source_component_0",
+  "subcircuit_id": "subcircuit_source_group_0",
+  "warning_type": "source_missing_manufacturer_part_number_warning",
+  "message": "<chip#20 name=\".ANT1\" /> is missing a manufacturer part number and could not be resolved to a supplier part. Specify mpn, manufacturerPartNumber, or mfn, provide supplierPartNumbers, or configure a parts engine to select a part. If this part will not be assembled, mark it doNotPlace."
+ },
+ {
+  "type": "pcb_component_missing_courtyard_warning",
+  "pcb_component_missing_courtyard_warning_id": "pcb_component_missing_courtyard_warning_0",
+  "warning_type": "pcb_component_missing_courtyard_warning",
+  "message": "ANT1 has no courtyard",
+  "pcb_component_id": "pcb_component_0",
+  "source_component_id": "source_component_0",
+  "subcircuit_id": "subcircuit_source_group_0"
+ },
+ {
+  "type": "pcb_copper_pour",
+  "pcb_copper_pour_id": "pcb_copper_pour_0",
+  "shape": "brep",
+  "layer": "bottom",
+  "brep_shape": {
+   "outer_ring": {
+    "vertices": [
+     {
+      "x": 29.8,
+      "y": -29.8
+     },
+     {
+      "x": -29.8,
+      "y": -29.8
+     },
+     {
+      "x": -29.800000000000008,
+      "y": 29.800000000000008
+     },
+     {
+      "x": 29.800000000000008,
+      "y": 29.8
+     }
+    ]
+   },
+   "inner_rings": []
+  },
+  "source_net_id": "source_net_0",
+  "subcircuit_id": "subcircuit_source_group_0",
+  "covered_with_solder_mask": true
+ },
+ {
+  "type": "pcb_copper_pour_isolated_warning",
+  "pcb_copper_pour_isolated_warning_id": "pcb_copper_pour_isolated_warning_0",
+  "warning_type": "pcb_copper_pour_isolated_warning",
+  "pcb_copper_pour_id": "pcb_copper_pour_0",
+  "source_net_id": "source_net_0",
+  "layer": "bottom",
+  "center": {
+   "x": 0,
+   "y": 3.552713678800501e-15
+  },
+  "message": "Copper pour for GND has an isolated island on bottom near (0.00 mm, 0.00 mm) with no physical connection to a same-net pad or via",
+  "subcircuit_id": "subcircuit_source_group_0"
+ }
+]

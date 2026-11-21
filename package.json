@@ -1,0 +1,113 @@
+{
+  "name": "openems-gui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot server/index.ts",
+    "build": "bun run build:ui && bun run build:electron",
+    "build:ui": "rm -rf dist/ui && bun build src/ui/index.html --outdir dist/ui --minify",
+    "build:electron": "bun build electron/main.ts --target=node --format=cjs --external electron --outfile dist/electron/main.cjs",
+    "start": "bun run build:ui && bun server/start.ts",
+    "desktop": "bun run build && electron .",
+    "dist": "bun run build && electron-builder --publish never",
+    "engine:build": "engine/build-engine.sh",
+    "engine:docker": "docker build -t openems-gui-engine:source engine",
+    "examples": "bun examples/build-examples.tsx",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tscircuit": "latest",
+    "typescript": "^5.6.0"
+  },
+  "description": "Desktop app that simulates Circuit JSON PCBs with openEMS",
+  "author": "tscircuit",
+  "license": "MIT",
+  "homepage": "https://github.com/tscircuit/openems-gui",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tscircuit/openems-gui.git"
+  },
+  "main": "dist/electron/main.cjs",
+  "trustedDependencies": [
+    "electron"
+  ],
+  "build": {
+    "appId": "com.tscircuit.openems-gui",
+    "productName": "openEMS GUI",
+    "artifactName": "openEMS-GUI-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/ui",
+        "to": "ui"
+      },
+      {
+        "from": "engine",
+        "to": "engine",
+        "filter": [
+          "run_sim.py",
+          "Dockerfile"
+        ]
+      },
+      {
+        "from": "examples",
+        "to": "examples",
+        "filter": [
+          "*.circuit.json"
+        ]
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "zip",
+        "dmg"
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "category": "Science",
+      "target": [
+        "tar.gz",
+        "AppImage"
+      ],
+      "executableName": "openems-gui",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "openEMS-GUI-win-${arch}-setup.${ext}"
+    }
+  }
+}
