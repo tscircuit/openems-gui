@@ -37,6 +37,7 @@ interface LiveJob {
   proc?: ReturnType<typeof spawn>
   containerName?: string
   currentRunDir?: string
+  simStage?: string
   energyHistory: Array<{ ts: number; db: number }>
   excitationLength: number
   finishRequested: boolean
@@ -163,7 +164,7 @@ export const createJobs = (config: AppConfig, engines: EngineManager) => {
             p.run = ev.index + 1
             p.timestep = 0
             p.energyDb = null
-            p.stage = `Simulating — port ${ev.port} excited`
+            p.stage = lj.simStage = `Simulating — port ${ev.port} excited`
             lj.currentRunDir = join(jobDir(lj.meta.id), `run_port${ev.port}`)
             lj.energyHistory = []
             lj.finishRequested = false
@@ -171,6 +172,9 @@ export const createJobs = (config: AppConfig, engines: EngineManager) => {
             break
           case "nf2ff_start":
             p.stage = "Computing far field"
+            break
+          case "fields_start":
+            p.stage = "Saving fields"
             break
           case "run_done":
             lj.meta.resultsVersion++
@@ -193,6 +197,8 @@ export const createJobs = (config: AppConfig, engines: EngineManager) => {
       return
     }
     pushLine(lj, line)
+    if (/^Create FDTD operator/.test(line)) p.stage = "Building the openEMS mesh"
+    else if (/^Running FDTD engine/.test(line) && lj.simStage) p.stage = lj.simStage
     const exc = /Excitation signal length is:\s*(\d+)\s*timesteps/.exec(line)
     if (exc) lj.excitationLength = Number(exc[1])
     const m = PROGRESS_RE.exec(line)

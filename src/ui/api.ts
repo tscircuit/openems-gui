@@ -1,4 +1,4 @@
-import type { SimInput, SimResults } from "../lib/types"
+import type { MeshCheck, SimInput, SimResults } from "../lib/types"
 
 export interface JobMeta {
   id: string
@@ -52,6 +52,11 @@ const call = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   if (!res.ok) throw new Error((data as any).error ?? `${res.status} ${res.statusText}`)
   return data as T
 }
+const binary = async (url: string): Promise<ArrayBuffer> => {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.arrayBuffer()
+}
 const post = (body: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
 
 export const api = {
@@ -69,4 +74,9 @@ export const api = {
   deleteJob: (id: string) => call<{ ok: true }>(`/api/jobs/${id}`, { method: "DELETE" }),
   results: (id: string) => call<SimResults>(`/api/jobs/${id}/files/results.json`),
   jobFile: <T,>(id: string, name: string) => call<T>(`/api/jobs/${id}/files/${name}`),
+  jobBinary: (id: string, name: string) => binary(`/api/jobs/${id}/files/${name}`),
+  mesh: () => call<MeshCheck>("/api/mesh"),
+  startMesh: (sim: SimInput, key: string) => call<MeshCheck>("/api/mesh", post({ sim, key })),
+  stopMesh: () => call<MeshCheck>("/api/mesh", { method: "DELETE" }),
+  meshPec: () => binary("/api/mesh/pec"),
 }

@@ -114,7 +114,7 @@ else {
       if (!existsSync(join(config.uiDir!, "index.html"))) throw new Error(`UI bundle not found at ${config.uiDir}`)
       const server = await startServer(config, { port: Number(process.env.OPENEMS_GUI_PORT ?? 0) })
       serverUrl = server.url
-      stopSimulations = () => server.app.jobs.killAll()
+      stopSimulations = () => server.app.shutdown()
       buildMenu()
       createWindow()
       win?.webContents.once("did-finish-load", selfTest)

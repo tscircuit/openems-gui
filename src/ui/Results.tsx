@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react"
 import type { SimResults } from "../lib/types"
 import { LineChart, PolarChart, type Series, SmithChart, type SmithTrace } from "./Charts"
+import { FieldsView } from "./FieldsView"
+import { TimeDomain } from "./TimeDomain"
 import type { JobMeta } from "./api"
 
 const sName = (to: number, from: number, n: number) => (n > 9 ? `S${to},${from}` : `S${to}${from}`)
@@ -48,6 +50,8 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
 
 export function Results({ results, meta }: { results: SimResults; meta: JobMeta }) {
   const [view, setView] = useState<"db" | "phase" | "vswr">("db")
+  const [mode, setMode] = useState<"freq" | "time" | "fields">("freq")
+  const hasFields = Object.keys(results.fields ?? {}).length > 0 || Object.values(results.nf2ff ?? {}).some((f) => f.pattern)
   const n = results.ports.length
   const fGHz = useMemo(() => results.freq.map((f) => f / 1e9), [results])
 
@@ -95,22 +99,24 @@ export function Results({ results, meta }: { results: SimResults; meta: JobMeta 
   const tiles = useMemo(() => {
     const out: Array<{ label: string; value: string; sub?: string }> = []
     if (first === undefined) return out
+    // a band that starts at 0 has a quasi-DC first sample; a perfect "match" there says nothing
+    const k0 = results.freq.length > 2 && results.freq[0] < (results.freq[1] - results.freq[0]) * 0.1 ? 1 : 0
     const s11 = results.s[`${first}_${first}`]
     if (s11) {
       const d = s11.re.map((re, k) => dB(re, s11.im[k]))
-      let mi = 0
-      for (let k = 1; k < d.length; k++) if (d[k] < d[mi]) mi = k
+      let mi = k0
+      for (let k = k0 + 1; k < d.length; k++) if (d[k] < d[mi]) mi = k
       out.push({ label: `Best match (${sName(first, first, n)})`, value: `${d[mi].toFixed(1)} dB`, sub: `at ${fGHz[mi].toFixed(3)} GHz` })
       if (d[mi] < -10) {
         let lo = mi
         let hi = mi
-        while (lo > 0 && d[lo - 1] < -10) lo--
+        while (lo > k0 && d[lo - 1] < -10) lo--
         while (hi < d.length - 1 && d[hi + 1] < -10) hi++
         const bw = fGHz[hi] - fGHz[lo]
         out.push({
           label: "−10 dB bandwidth",
           value: bw >= 1 ? `${bw.toFixed(2)} GHz` : `${(bw * 1000).toFixed(0)} MHz`,
-          sub: `${fGHz[lo].toFixed(3)} – ${fGHz[hi].toFixed(3)} GHz${lo === 0 || hi === d.length - 1 ? " (band edge)" : ""}`,
+          sub: `${fGHz[lo].toFixed(3)} – ${fGHz[hi].toFixed(3)} GHz${lo === k0 || hi === d.length - 1 ? " (band edge)" : ""}`,
         })
       }
       if (zin) out.push({ label: "Input impedance there", value: `${zin.re[mi].toFixed(1)} ${zin.im[mi] >= 0 ? "+" : "−"} j${Math.abs(zin.im[mi]).toFixed(1)} Ω` })
@@ -118,7 +124,7 @@ export function Results({ results, meta }: { results: SimResults; meta: JobMeta 
     const through = results.ports.find((p) => p.number !== first)
     const s21 = through ? results.s[`${through.number}_${first}`] : undefined
     if (s21 && through) {
-      const d = s21.re.map((re, k) => dB(re, s21.im[k]))
+      const d = s21.re.map((re, k) => (k < k0 ? Number.NEGATIVE_INFINITY : dB(re, s21.im[k])))
       const peak = Math.max(...d)
       const k3 = d.findIndex((v, k) => k > d.indexOf(peak) && v < peak - 3)
       out.push({
@@ -140,8 +146,32 @@ export function Results({ results, meta }: { results: SimResults; meta: JobMeta 
   const totalSec = results.runs.reduce((s, r) => s + r.seconds, 0)
   const partial = meta.status === "running"
 
+  const modeTabs = (
+    <div className="segmented mode-tabs" role="tablist">
+      {(
+        [
+          ["freq", "Frequency domain"],
+          ["time", "Time domain"],
+          ["fields", hasFields ? "3D fields" : "3D fields (not recorded)"],
+        ] as const
+      ).map(([id, label]) => (
+        <button key={id} className={mode === id ? "on" : ""} onClick={() => setMode(id)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+  if (mode === "fields")
+    return (
+      <div className="results fill">
+        {modeTabs}
+        <FieldsView results={results} jobId={meta.id} />
+      </div>
+    )
+
   return (
     <div className="results">
+      {modeTabs}
       {partial && <div className="notice">Showing partial results — {results.excited.length} of {meta.progress.totalRuns} excitation runs finished.</div>}
       {meta.messages.map((m) => (
         <div key={m} className="notice warn">
@@ -155,6 +185,9 @@ export function Results({ results, meta }: { results: SimResults; meta: JobMeta 
         <Tile label="Solver time" value={totalSec >= 90 ? `${(totalSec / 60).toFixed(1)} min` : `${totalSec.toFixed(1)} s`} sub={`${meta.progress.cells.toLocaleString()} cells · ${results.runs.length} run${results.runs.length === 1 ? "" : "s"}`} />
       </div>
 
+      {mode === "time" && <TimeDomain results={results} />}
+      {mode === "freq" && (
+        <>
       <div className="chart-controls">
         <div className="segmented" role="tablist">
           {(
@@ -255,6 +288,8 @@ export function Results({ results, meta }: { results: SimResults; meta: JobMeta 
           </table>
         </div>
       </details>
+        </>
+      )}
     </div>
   )
 }

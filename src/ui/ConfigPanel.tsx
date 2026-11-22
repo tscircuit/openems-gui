@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
-import { SUBSTRATE_PRESETS } from "../lib/build-sim"
-import type { Boundary, BuildResult, Pad, PcbModel, PortDef, SimConfig } from "../lib/types"
+import { SUBSTRATE_PRESETS, defaultFields } from "../lib/build-sim"
+import type { BuildResult, Pad, PcbModel, PortDef, SimConfig } from "../lib/types"
 import type { Selection } from "./PcbView"
 
 export function Num({
@@ -68,13 +68,21 @@ interface Props {
   selection: Selection | null
   pickingSecondPad: boolean
   setPickingSecondPad: (v: boolean) => void
+  openMesh: () => void
 }
 
 let portSeq = 0
 const newId = () => `port-${Date.now().toString(36)}-${portSeq++}`
 
-export function ConfigPanel({ model, config, setConfig, built, selection, pickingSecondPad, setPickingSecondPad }: Props) {
+export function ConfigPanel({ model, config, setConfig, built, selection, pickingSecondPad, setPickingSecondPad, openMesh }: Props) {
   const set = (patch: Partial<SimConfig>) => setConfig({ ...config, ...patch })
+  const fields = config.fields ?? defaultFields(config.thickness)
+  const setFields = (patch: Partial<SimConfig["fields"]>) => set({ fields: { ...fields, ...patch } })
+  const [freqText, setFreqText] = useState(fields.freqsGHz.join(", "))
+  useEffect(() => {
+    const parsed = freqText.split(/[\s,;]+/).map(Number).filter((v) => Number.isFinite(v) && v > 0)
+    if (parsed.join(",") !== fields.freqsGHz.join(",")) setFreqText(fields.freqsGHz.join(", "))
+  }, [fields.freqsGHz.join(",")])
   const padById = new Map(model.pads.map((p) => [p.id, p]))
   const selPad: Pad | null = selection?.kind === "pad" ? (padById.get(selection.padId) ?? null) : null
   const otherLayers = (l: string) => model.layers.filter((x) => x !== l)
@@ -99,7 +107,6 @@ export function ConfigPanel({ model, config, setConfig, built, selection, pickin
   const preset = Object.entries(SUBSTRATE_PRESETS).find(([, p]) => p.epsR === config.epsR && p.tanD === config.tanD)?.[0] ?? "custom"
   const s = built.stats
   const memMb = s ? (s.cells * 60) / 1e6 : 0
-  const lambdaQuarter = 299.792458 / (((config.fStartGHz + config.fStopGHz) / 2) * 4)
 
   return (
     <div className="config">
@@ -267,33 +274,13 @@ export function ConfigPanel({ model, config, setConfig, built, selection, pickin
       </Section>
 
       <Section title="Mesh" badge={s ? `${(s.cells / 1e6).toFixed(s.cells < 1e5 ? 3 : 2)} M cells` : undefined}>
-        <div className="grid3">
-          <Num label="Copper cell" unit="mm" value={config.meshRes} min={0} title="Largest cell edge in the region that contains copper" onChange={(v) => set({ meshRes: v })} />
-          <Num label="Cells / λ" value={config.cellsPerWavelength} min={8} step={1} title="Cells per wavelength at the stop frequency, away from copper" onChange={(v) => set({ cellsPerWavelength: v })} />
-          <Num label="Substrate cells" value={config.substrateCells} min={1} step={1} title="Cells across the substrate thickness" onChange={(v) => set({ substrateCells: Math.max(1, Math.round(v)) })} />
-        </div>
         {s && (
-          <p className="hint">
-            {s.nx} × {s.ny} × {s.nz} lines · smallest cell {s.minCell.toFixed(3)} mm · timestep ≈ {s.estTimestepPs.toFixed(2)} ps · ≈ {memMb < 1000 ? `${memMb.toFixed(0)} MB` : `${(memMb / 1000).toFixed(1)} GB`} RAM
+          <p className="hint" style={{ marginTop: 0 }}>
+            {s.nx} × {s.ny} × {s.nz} lines · smallest cell {s.minCell.toFixed(3)} mm · ≈ {memMb < 1000 ? `${memMb.toFixed(0)} MB` : `${(memMb / 1000).toFixed(1)} GB`} RAM
           </p>
         )}
-      </Section>
-
-      <Section title="Boundaries" defaultOpen={false}>
-        <label className="field">
-          <span>Type</span>
-          <select value={config.boundary} onChange={(e) => set({ boundary: e.target.value as Boundary })}>
-            <option value="PML_8">PML (8 cells) — best absorber, for antennas</option>
-            <option value="MUR">Mur absorber — faster, fine for circuits</option>
-            <option value="PEC">PEC — closed metal box</option>
-          </select>
-        </label>
-        <div className="grid2">
-          <Num label="Air margin, sides" unit="mm" value={config.marginXY} min={0} onChange={(v) => set({ marginXY: v })} />
-          <Num label="Air margin, above/below" unit="mm" value={config.marginZ} min={0} onChange={(v) => set({ marginZ: v })} />
-        </div>
-        <button className="btn small" onClick={() => set({ marginXY: +lambdaQuarter.toFixed(1), marginZ: +lambdaQuarter.toFixed(1) })}>
-          Set margins to λ/4 ({lambdaQuarter.toFixed(1)} mm)
+        <button className="btn small" onClick={openMesh}>
+          Mesh settings, boundaries and 3D preview →
         </button>
       </Section>
 
@@ -303,6 +290,41 @@ export function ConfigPanel({ model, config, setConfig, built, selection, pickin
           <Num label="Max timesteps" value={config.maxTimesteps} min={100} step={1000} onChange={(v) => set({ maxTimesteps: v })} />
           <Num label="Threads" value={config.threads} min={0} step={1} title="0 = let openEMS decide" onChange={(v) => set({ threads: Math.max(0, Math.round(v)) })} />
         </div>
+      </Section>
+
+      <Section title="Fields & far field" defaultOpen={false} badge={[fields.frequency || fields.time ? "fields" : "", config.nf2ff.enabled ? "far field" : ""].filter(Boolean).join(" + ") || undefined}>
+        <label className="check" title="E and H in a box around the board, as 3D slices under Results → 3D fields">
+          <input type="checkbox" checked={fields.frequency} onChange={(e) => setFields({ frequency: e.target.checked })} />
+          Record fields at set frequencies
+        </label>
+        {fields.frequency && (
+          <label className="field">
+            <span>Frequencies, GHz (up to 3, empty = band centre)</span>
+            <input
+              type="text"
+              value={freqText}
+              placeholder={((config.fStartGHz + config.fStopGHz) / 2).toFixed(2)}
+              onChange={(e) => {
+                setFreqText(e.target.value)
+                setFields({ freqsGHz: e.target.value.split(/[\s,;]+/).map(Number).filter((v) => Number.isFinite(v) && v > 0).slice(0, 3) })
+              }}
+            />
+          </label>
+        )}
+        <label className="check" title="A movie of the excitation pulse travelling through the board, on a plane inside the substrate">
+          <input type="checkbox" checked={fields.time} onChange={(e) => setFields({ time: e.target.checked })} />
+          Record the E field over time (pulse animation)
+        </label>
+        {(fields.frequency || fields.time) && (
+          <>
+            {fields.frequency && <Num label="Recorded height above and below the board" unit="mm" value={fields.height} min={0} onChange={(v) => setFields({ height: v })} />}
+            <p className="hint">
+              {fields.frequency && s ? `${s.dumpPoints.volume.toLocaleString()} points per frequency. ` : ""}
+              {fields.time && s ? `${s.dumpPoints.plane.toLocaleString()} points per movie frame; up to ${s.movieTempBytes >= 1e9 ? `${(s.movieTempBytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(s.movieTempBytes / 1e6))} MB`} of temporary data if the run uses every timestep. ` : ""}
+              Recording slows the solver slightly.
+            </p>
+          </>
+        )}
         <label className="check">
           <input type="checkbox" checked={config.nf2ff.enabled} onChange={(e) => set({ nf2ff: { ...config.nf2ff, enabled: e.target.checked } })} />
           Compute far field (antenna pattern)

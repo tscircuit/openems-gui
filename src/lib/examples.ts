@@ -34,7 +34,61 @@ const gapPort = (model: PcbModel, labelA: string, labelB: string, n: number, nam
   return { id: `port${n}`, kind: "lateral" as const, name, padA: a.id, padB: b.id, impedance: 50, excite }
 }
 
+/**
+ * The two DDR boards differ only in the gap between the serpentine legs. Both route DQ0 2 mm longer than DQS
+ * to make up for its twelve square corners (each is electrically about 0.17 mm shorter than its centre line),
+ * so that the well spaced serpentine really is matched. Open the Time domain results for delay, skew and TDR,
+ * and 3D fields for the pulse travelling down both nets.
+ *
+ * Shared set-up of the two DDR serpentine boards: DC to 10 GHz on a 0.1 mm mesh (all copper edges are on that
+ * grid), ports 1-2 on the straight DQS trace and 3-4 on the length-matched DQ0 trace. Ports 1 and 3 are
+ * excited, which gives the through delay and TDR of both nets and the crosstalk between them.
+ */
+const ddrConfig = (c: SimConfig, m: PcbModel): SimConfig => ({
+  ...c,
+  fStartGHz: 0,
+  fStopGHz: 10,
+  // L1 over the L2 plane of a 4-layer board; the circuit JSON carries the 0.2 mm thickness
+  thickness: 0.2,
+  meshRes: 0.1,
+  substrateCells: 4,
+  boundary: "MUR",
+  marginXY: 3,
+  marginZ: 3,
+  // 2.5 ns. With a pulse that reaches down to DC the field energy levels off near -24 dB, so the -40 dB end
+  // criterion never triggers; the port signals are over long before (|ΔS| < 1e-4 against 60000 steps).
+  maxTimesteps: 20000,
+  // The solver's dielectric loss is a constant conductivity fitted at the band centre. Over a band that
+  // starts at DC that acts like a leaky dielectric (DC gain 0.95, sagging TDR), so the loss is left out here;
+  // it changes the skew by less than 0.3 ps.
+  tanD: 0,
+  ports: [
+    { ...padPort(m, "P1.pin1", 1, true), name: "DQS in" },
+    { ...padPort(m, "P2.pin1", 2, false), name: "DQS out" },
+    { ...padPort(m, "P3.pin1", 3, true), name: "DQ0 in" },
+    { ...padPort(m, "P4.pin1", 4, false), name: "DQ0 out" },
+  ],
+  // record the pulse travelling along both nets, and the fields at 2 GHz, for the 3D view
+  fields: { frequency: true, freqsGHz: [2], time: true, height: 1 },
+})
+
 export const EXAMPLES: ExampleDef[] = [
+  {
+    id: "ddr-bad",
+    title: "Bad DDR: tight serpentine",
+    description:
+      "DQ0 is length-matched to a straight 26 mm DQS strobe with a serpentine whose legs are only 0.2 mm apart (half a trace width). The legs couple, so the edge takes a shortcut: simulated, DQ0 arrives 13 ps before DQS and its TDR dips to 37 Ω.",
+    file: "bad-ddr.circuit.json",
+    configure: ddrConfig,
+  },
+  {
+    id: "ddr-good",
+    title: "Good DDR: spaced serpentine",
+    description:
+      "The same board, pads, routed length and corners, with the serpentine legs 1.2 mm apart (3 trace widths): simulated, DQ0 arrives within 1.2 ps of DQS and its TDR stays within 2 Ω.",
+    file: "good-ddr.circuit.json",
+    configure: ddrConfig,
+  },
   {
     id: "wifi-ifa",
     title: "2.4 GHz Wi-Fi / BLE inverted-F antenna",
@@ -55,6 +109,8 @@ export const EXAMPLES: ExampleDef[] = [
       // feed stub (pin1) against the ground edge (pin2), across the 0.5 mm feed gap
       ports: [gapPort(m, "ANT1.pin1", "ANT1.pin2", 1, "Feed", true)],
       nf2ff: { enabled: true, freqGHz: 2.44 },
+      // near fields around the board at the Wi-Fi band centre, for the 3D view
+      fields: { frequency: true, freqsGHz: [2.44], time: false, height: 5 },
     }),
   },
   {

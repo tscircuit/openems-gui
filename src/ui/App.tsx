@@ -5,6 +5,7 @@ import { extractPcbModel, normalizeCircuitJson } from "../lib/extract"
 import type { Pad, PcbModel, SimConfig, SimResults } from "../lib/types"
 import { ConfigPanel, addLateralPort } from "./ConfigPanel"
 import { EnginePanel } from "./EnginePanel"
+import { MeshTab } from "./MeshTab"
 import { PcbView, type Selection } from "./PcbView"
 import { Results } from "./Results"
 import { type EngineInfo, type JobMeta, api } from "./api"
@@ -35,7 +36,7 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [pickingSecondPad, setPickingSecondPad] = useState(false)
-  const [tab, setTab] = useState<"board" | "results" | "log">("board")
+  const [tab, setTab] = useState<"board" | "mesh" | "results" | "log">("board")
   const [engine, setEngine] = useState<EngineInfo | null>(null)
   const [showEngine, setShowEngine] = useState(false)
   const [jobs, setJobs] = useState<JobMeta[]>([])
@@ -263,8 +264,10 @@ export function App() {
               <div key={j.id} className={`menu-item job${j.id === activeJobId ? " active" : ""}`}>
                 <button
                   className="job-main"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     ;(e.currentTarget.closest("details") as HTMLDetailsElement).open = false
+                    // with no board open there is nowhere to show the run: bring its board back first
+                    if (!doc) await restoreSetup(j.id)
                     setActiveJobId(j.id)
                     setTab(j.resultsVersion > 0 ? "results" : "log")
                   }}
@@ -337,7 +340,7 @@ export function App() {
               {(doc.model.board.maxX - doc.model.board.minX).toFixed(1)} × {(doc.model.board.maxY - doc.model.board.minY).toFixed(1)} mm · {doc.model.layers.length} layers · {doc.model.pads.length} pads ·{" "}
               {doc.model.copper.filter((c) => c.kind === "trace").length} trace segments · {doc.model.barrels.length} vias/holes
             </div>
-            <ConfigPanel model={doc.model} config={config} setConfig={setConfig} built={built} selection={selection} pickingSecondPad={pickingSecondPad} setPickingSecondPad={setPickingSecondPad} />
+            <ConfigPanel model={doc.model} config={config} setConfig={setConfig} built={built} selection={selection} pickingSecondPad={pickingSecondPad} setPickingSecondPad={setPickingSecondPad} openMesh={() => setTab("mesh")} />
             <div className="runbar">
               {errors.map((e) => (
                 <div key={e} className="notice error">
@@ -396,7 +399,8 @@ export function App() {
             <nav className="tabs">
               {(
                 [
-                  ["board", "Board & mesh"],
+                  ["board", "Board & ports"],
+                  ["mesh", "Mesh"],
                   ["results", "Results"],
                   ["log", "Solver log"],
                 ] as const
@@ -406,7 +410,7 @@ export function App() {
                   {id === "log" && running && <i className="status running" />}
                 </button>
               ))}
-              {job && tab !== "board" && (
+              {job && (tab === "results" || tab === "log") && (
                 <span className="tab-note">
                   <i className={`status ${job.meta.status}`} /> {job.meta.name} · {job.meta.status}
                 </span>
@@ -415,6 +419,11 @@ export function App() {
             <div className="tab-body" hidden={tab !== "board"}>
               <PcbView model={doc.model} config={config} built={built} selection={selection} pickingSecondPad={pickingSecondPad} onPick={onPick} />
             </div>
+            {tab === "mesh" && (
+              <div className="tab-body">
+                <MeshTab config={config} setConfig={setConfig} built={built} engineReady={!!engine && engine.mode !== "none"} />
+              </div>
+            )}
             {tab === "results" && (
               <div className="tab-body scroll">
                 {job?.results ? (

@@ -6,19 +6,20 @@
  * The RF examples (IFA, hairpin filter, Wilkinson divider) are printed copper structures. They are drawn as
  * a <chip> whose custom <footprint> is a set of rectangular SMT pads: overlapping / abutting pads of one
  * footprint merge into one conductor in the simulation. All their dimensions sit on a 0.25 mm grid so that
- * copper edges coincide with FDTD mesh lines. The parameter objects hold the values that were tuned with
- * openEMS; the builders take overrides so a tuning script can sweep them.
+ * copper edges coincide with FDTD mesh lines (0.1 mm for the DDR serpentine pair). The parameter objects hold
+ * the values that were tuned with openEMS; the builders take overrides so a tuning script can sweep them.
  */
 import { Fragment, createElement } from "react"
 import { Circuit } from "tscircuit"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-const FeedPad = (props: { name: string; pcbX: number; pcbY: number; size?: number }) => (
+const FeedPad = (props: { name: string; pcbX: number; pcbY: number; size?: number; net?: string }) => (
   <chip
     name={props.name}
     pcbX={props.pcbX}
     pcbY={props.pcbY}
+    connections={props.net ? { pin1: `net.${props.net}` } : undefined}
     footprint={
       <footprint>
         <smtpad
@@ -275,6 +276,102 @@ export const wilkinsonDivider = (over: Partial<WilkinsonParams> = {}) => {
   )
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// DDR length matching: a straight strobe (DQS) and a data line (DQ0) whose serpentine makes up the same
+// routed length. "Bad" and "Good" are the same board, the same pads and the same serpentine (humps, amplitude,
+// corners, centre-line length); only the gap between neighbouring serpentine legs differs.
+// ---------------------------------------------------------------------------------------------------------
+export const ddrDefaults = {
+  boardW: 30,
+  boardH: 8,
+  /** L1 to the L2 ground plane of a 4-layer stack-up, modelled as a 2-layer board of this thickness */
+  thickness: 0.2,
+  /** trace width (about 49 ohm on 0.2 mm FR-4) */
+  w: 0.4,
+  /** routed centre-line length of both nets, port to port */
+  len: 26,
+  /**
+   * Corner compensation: DQ0 is routed this much longer than DQS. A square corner is electrically about
+   * 0.17 mm (0.43 trace widths, 1.07 ps) shorter than its centre line, and DQ0 has twelve of them. With 0
+   * (plain centre-line matching) even the well spaced serpentine arrives 13.6 ps early.
+   */
+  dqExtra: 2,
+  /** the DQ0 ports sit at x = -dqPadX and +dqPadX; the serpentine has to make up len + dqExtra - 2 dqPadX */
+  dqPadX: 8,
+  /** number of serpentine humps (each one is two legs and four right-angle corners) */
+  humps: 3,
+  /** centre-line height of a hump */
+  amp: 2,
+  /** edge-to-edge gap between neighbouring serpentine legs: the only thing Bad and Good differ in */
+  gap: 1.2,
+  /** centre-line y of the straight DQS trace and of the DQ0 base line (the humps point away from DQS) */
+  yDqs: -2,
+  yDq: 0,
+}
+export type DdrParams = typeof ddrDefaults
+
+/** Centre-line corner points of the DQ0 route and the resulting copper, exported for the tuning scripts. */
+export const ddrGeometry = (over: Partial<DdrParams> = {}) => {
+  const p = { ...ddrDefaults, ...over }
+  const hw = p.w / 2
+  const pitch = p.w + p.gap
+  const legs = 2 * p.humps
+  const legX = Array.from({ length: legs }, (_, k) => r3((k - (legs - 1) / 2) * pitch))
+  // centre line: base line -> up leg -> top -> down leg -> base line -> ...
+  const path: { x: number; y: number }[] = [{ x: -p.dqPadX, y: p.yDq }]
+  for (let k = 0; k < legs; k++) {
+    const up = k % 2 === 0
+    path.push({ x: legX[k], y: up ? p.yDq : p.yDq + p.amp }, { x: legX[k], y: up ? p.yDq + p.amp : p.yDq })
+  }
+  path.push({ x: p.dqPadX, y: p.yDq })
+  let routed = 0
+  let corners = 0
+  for (let i = 1; i < path.length; i++) {
+    const dx = path[i].x - path[i - 1].x
+    const dy = path[i].y - path[i - 1].y
+    if (Math.abs(dx) > 1e-9 && Math.abs(dy) > 1e-9) throw new Error("DDR serpentine: segment is not axis aligned")
+    if (dx < -1e-9) throw new Error("DDR serpentine: does not fit between the DQ0 pads")
+    routed += Math.abs(dx) + Math.abs(dy)
+    if (i > 1) corners++
+  }
+  if (Math.abs(routed - (p.len + p.dqExtra)) > 1e-3)
+    throw new Error(`DDR serpentine: routed DQ0 length ${routed.toFixed(4)} mm is not ${p.len + p.dqExtra} mm (2 dqPadX + 2 humps amp must equal len + dqExtra)`)
+  if (legX[0] - hw < -p.dqPadX + p.w) throw new Error("DDR serpentine: no room for the lead-in between pad and first leg")
+  const dqsSpacing = p.yDq - hw - (p.yDqs + hw)
+  if (dqsSpacing < 1.6 - 1e-9) throw new Error(`DDR serpentine: DQS to DQ0 spacing ${dqsSpacing} mm is under 1.6 mm`)
+  // every segment becomes one rectangle, widened by w/2 at both ends so that the outer corners are square
+  const dq: Cu[] = []
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1]
+    const b = path[i]
+    dq.push(cu("pin2", Math.min(a.x, b.x) - hw, Math.min(a.y, b.y) - hw, Math.max(a.x, b.x) + hw, Math.max(a.y, b.y) + hw))
+  }
+  const dqs: Cu[] = [cu("pin1", -p.len / 2 - hw, p.yDqs - hw, p.len / 2 + hw, p.yDqs + hw)]
+  const rects = [...dqs, ...dq]
+  // all copper edges must lie on the 0.1 mm mesh grid
+  for (const r of rects)
+    for (const v of [r.x0, r.y0, r.x1, r.y1])
+      if (Math.abs(v * 10 - Math.round(v * 10)) > 1e-6) throw new Error(`DDR serpentine: copper edge ${v} is off the 0.1 mm grid`)
+  return { p, rects, path, routed, corners, pitch, legX, dqsSpacing }
+}
+
+export const ddrSerpentine = (over: Partial<DdrParams> = {}) => {
+  const { p, rects } = ddrGeometry(over)
+  return (
+    <board width={`${p.boardW}mm`} height={`${p.boardH}mm`} thickness={`${p.thickness}mm`} placementDrcChecksDisabled routingDisabled>
+      <FeedPad name="P1" pcbX={-p.len / 2} pcbY={p.yDqs} size={p.w} net="DQS" />
+      <FeedPad name="P2" pcbX={p.len / 2} pcbY={p.yDqs} size={p.w} net="DQS" />
+      <FeedPad name="P3" pcbX={-p.dqPadX} pcbY={p.yDq} size={p.w} net="DQ0" />
+      <FeedPad name="P4" pcbX={p.dqPadX} pcbY={p.yDq} size={p.w} net="DQ0" />
+      <PrintedCopper name="DDR1" rects={rects} connections={{ pin1: "net.DQS", pin2: "net.DQ0" }} />
+      <copperpour layer="bottom" connectsTo="net.GND" />
+    </board>
+  )
+}
+/** leg-to-leg gap of the two bundled boards: 0.5 x and 3 x the trace width */
+export const DDR_BAD_GAP = 0.2
+export const DDR_GOOD_GAP = 1.2
+
 // tscircuit numbers components per process and quotes those numbers in its warning messages ("<chip#31 ...>"),
 // so a file built on its own and one built in an all-examples run differ in those messages and in nothing else.
 export const examples: Record<string, (params?: any) => any> = {
@@ -326,6 +423,8 @@ export const examples: Record<string, (params?: any) => any> = {
       <copperpour layer="bottom" connectsTo="net.GND" />
     </board>
   ),
+  "bad-ddr": (params?: Partial<DdrParams>) => ddrSerpentine({ gap: DDR_BAD_GAP, ...params }),
+  "good-ddr": (params?: Partial<DdrParams>) => ddrSerpentine({ gap: DDR_GOOD_GAP, ...params }),
   "wifi-ifa": wifiIfa,
   "hairpin-bpf": hairpinBpf,
   "wilkinson-divider": wilkinsonDivider,

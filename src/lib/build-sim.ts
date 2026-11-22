@@ -1,6 +1,6 @@
 import { type BBox, type Pt, bboxIntersects, clipPolygonToRect, decomposeWithHoles, pointInPolygon, polygonArea, unionBBox } from "./geom"
 import { type LineSpec, fillMesh, mergeLines, minCell } from "./mesh"
-import type { BuildResult, Pad, PcbModel, PortDef, SimConfig, SimInput, SimLumped, SimPortGeom } from "./types"
+import type { BuildResult, FieldDumpConfig, Pad, PcbModel, PortDef, SimConfig, SimDump, SimInput, SimLumped, SimPortGeom } from "./types"
 
 const C0 = 299792458
 const EPS0 = 8.854187817e-12
@@ -13,6 +13,17 @@ export const SUBSTRATE_PRESETS: Record<string, { epsR: number; tanD: number; lab
   ptfe: { epsR: 2.1, tanD: 0.0002, label: "PTFE" },
   air: { epsR: 1, tanD: 0, label: "Air (no dielectric)" },
 }
+
+export const defaultFields = (thickness: number): FieldDumpConfig => ({
+  frequency: false,
+  freqsGHz: [],
+  time: false,
+  height: +Math.min(5, Math.max(1, 3 * thickness)).toFixed(1),
+})
+
+/** Grid points per recorded frame are capped by sub-sampling the dump. */
+const MAX_VOLUME_POINTS = 250e3
+const MAX_PLANE_POINTS = 30e3
 
 export const defaultConfig = (model: PcbModel): SimConfig => {
   const preset = SUBSTRATE_PRESETS[model.board.material] ?? SUBSTRATE_PRESETS.fr4
@@ -39,6 +50,7 @@ export const defaultConfig = (model: PcbModel): SimConfig => {
     modelPassives: true,
     ports: [],
     nf2ff: { enabled: false, freqGHz: 2.4 },
+    fields: defaultFields(model.board.thickness),
     region: null,
     threads: 0,
   }
@@ -93,7 +105,7 @@ export const layerZMap = (model: PcbModel, thickness: number): Record<string, nu
 export const buildSimulation = (model: PcbModel, config: SimConfig): BuildResult => {
   const errors: string[] = []
   const warnings: string[] = []
-  const fail = (): BuildResult => ({ input: null, errors, warnings, stats: null, ports: [], lumped: [] })
+  const fail = (): BuildResult => ({ input: null, preview: null, errors, warnings, stats: null, ports: [], lumped: [] })
 
   const fStart = config.fStartGHz * 1e9
   const fStop = config.fStopGHz * 1e9
@@ -290,7 +302,7 @@ export const buildSimulation = (model: PcbModel, config: SimConfig): BuildResult
       addLateralLines(g)
     }
   }
-  if (errors.length) return { ...fail(), ports, lumped }
+  // (port errors do not stop here: the geometry and mesh are still built for the previews)
 
   // ---- mesh -------------------------------------------------------------
   const lambdaMin = (C0 / fStop) * 1e3 // mm, in air
@@ -363,6 +375,45 @@ export const buildSimulation = (model: PcbModel, config: SimConfig): BuildResult
     warnings.push("Far-field accuracy: the air margin is under λ/5 at the far-field frequency. Around λ/4 is recommended for antennas.")
 
   const f0 = (fStart + fStop) / 2
+
+  // ---- field recordings ----------------------------------------------------
+  const dumps: SimDump[] = []
+  const dumpPoints = { volume: 0, plane: 0 }
+  const fd = config.fields
+  if (fd && (fd.frequency || fd.time)) {
+    const h = Math.max(0, fd.height)
+    const padXY = Math.min(config.marginXY * 0.5, Math.max(h, res))
+    const lo: [number, number, number] = [region.minX - padXY, region.minY - padXY, Math.max(box.minZ, -h)]
+    const hi: [number, number, number] = [region.maxX + padXY, region.maxY + padXY, Math.min(box.maxZ, config.thickness + h)]
+    const count = (lines: number[], a: number, b: number) => lines.filter((v) => v >= a - 1e-9 && v <= b + 1e-9).length
+    const nxy = count(meshX, lo[0], hi[0]) * count(meshY, lo[1], hi[1])
+    if (fd.frequency) {
+      const nz = count(meshZ, lo[2], hi[2])
+      const sub = Math.max(1, Math.ceil(Math.sqrt((nxy * nz) / MAX_VOLUME_POINTS)))
+      const wanted = (fd.freqsGHz ?? []).map((g) => g * 1e9).filter((f) => f > 0 && f <= fStop * 1.001)
+      const freqs = wanted.length ? Array.from(new Set(wanted)).slice(0, 3) : [f0]
+      if ((fd.freqsGHz ?? []).length > wanted.length) warnings.push("Field frequencies above the stop frequency are ignored.")
+      for (const quantity of ["E", "H"] as const) dumps.push({ name: quantity, quantity, domain: "freq", start: lo, stop: hi, sub: [sub, sub, 1], freqs })
+      dumpPoints.volume = Math.ceil(nxy / (sub * sub)) * nz
+    }
+    if (fd.time) {
+      // halfway between the top copper layer and the next conductor (or the board bottom) below it
+      const top = zStack[zStack.length - 1]
+      const below = zStack.length > 1 ? zStack[zStack.length - 2] : 0
+      const zPlane = +((top + below) / 2).toFixed(6)
+      const sub = Math.max(1, Math.ceil(Math.sqrt(nxy / MAX_PLANE_POINTS)))
+      dumps.push({ name: "Et", quantity: "E", domain: "time", start: [lo[0], lo[1], zPlane], stop: [hi[0], hi[1], zPlane], sub: [sub, sub, 1], max_frames: 120 })
+      dumpPoints.plane = Math.ceil(nxy / (sub * sub))
+    }
+  }
+  // openEMS writes a movie frame four times per Nyquist period of the excitation, for the whole run
+  const movieFrames = dumpPoints.plane ? Math.ceil(config.maxTimesteps * 8 * fStop * dt) : 0
+  const movieTempBytes = movieFrames * dumpPoints.plane * 12
+  if (movieTempBytes > 2e9)
+    warnings.push(
+      `The E-field movie could write up to ${(movieTempBytes / 1e9).toFixed(1)} GB of temporary data if the run uses all ${Math.round(config.maxTimesteps).toLocaleString()} timesteps. Lower the maximum timesteps or switch the movie off.`,
+    )
+
   const input: SimInput = {
     version: 1,
     unit: 1e-3,
@@ -385,10 +436,12 @@ export const buildSimulation = (model: PcbModel, config: SimConfig): BuildResult
     lumped,
     ports,
     nf2ff: { enabled: config.nf2ff.enabled, freq: config.nf2ff.freqGHz * 1e9 },
+    dumps,
     threads: config.threads,
   }
   return {
-    input,
+    input: errors.length ? null : input,
+    preview: input,
     errors,
     warnings,
     stats: {
@@ -400,8 +453,18 @@ export const buildSimulation = (model: PcbModel, config: SimConfig): BuildResult
       polygons: polygons.length,
       estTimestepPs: dt * 1e12,
       region,
+      dumpPoints,
+      movieTempBytes,
     },
     ports,
     lumped,
   }
+}
+
+/** Identifies the FDTD grid of a model: changes whenever openEMS would build a different operator. */
+export const meshKey = (sim: SimInput): string => {
+  const text = JSON.stringify([sim.mesh, sim.polygons, sim.vias, sim.substrate, sim.ports, sim.lumped, sim.boundaries, sim.f_start, sim.f_stop])
+  let h = 5381
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
+  return `${text.length}-${(h >>> 0).toString(36)}`
 }

@@ -141,7 +141,7 @@ export function PcbView({ model, config, built, selection, pickingSecondPad, onP
     return m
   }, [model])
 
-  const mesh = built.input?.mesh
+  const mesh = built.preview?.mesh
   const meshPath = useMemo(() => {
     if (!mesh) return ""
     const x0 = mesh.x[0]

@@ -44,6 +44,16 @@ test("job endpoints validate input and ids", async () => {
   expect(bad.status).toBe(409)
 })
 
+test("mesh build endpoints report an idle state and validate input", async () => {
+  const state = (await (await get("/api/mesh")).json()) as { status: string; log: string[] }
+  expect(state.status).toBe("idle")
+  expect((await get("/api/mesh/pec")).status).toBe(404)
+  // stopping when nothing runs is harmless
+  expect((await app.handle(new Request("http://localhost/api/mesh", { method: "DELETE" }))).status).toBe(200)
+  expect(() => app.mesh.start({} as any, "k", { active: null } as any)).toThrow("Invalid simulation input")
+  app.shutdown()
+})
+
 test("engine preference is validated and persisted", async () => {
   const post = (kind: string) => app.handle(new Request("http://localhost/api/engine/prefer", { method: "POST", body: JSON.stringify({ kind }) }))
   expect((await post("bogus")).status).toBe(400)

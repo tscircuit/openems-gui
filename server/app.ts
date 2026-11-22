@@ -9,7 +9,9 @@ import { Readable } from "node:stream"
 import { EXAMPLES } from "../src/lib/examples"
 import type { AppConfig } from "./config"
 import { type EngineKind, createEngineManager } from "./engine"
+import type { SimInput } from "../src/lib/types"
 import { createJobs } from "./jobs"
+import { createMeshCheck } from "./mesh"
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -37,6 +39,7 @@ const fileResponse = (path: string, headers: Record<string, string> = {}) => {
 export const createApp = (config: AppConfig) => {
   const engines = createEngineManager(config)
   const jobs = createJobs(config, engines)
+  const mesh = createMeshCheck(config, engines)
 
   const api = async (req: Request, path: string, url: URL): Promise<Response> => {
     const method = req.method.toUpperCase()
@@ -70,6 +73,26 @@ export const createApp = (config: AppConfig) => {
       const ex = EXAMPLES.find((e) => e.id === m![1])
       if (!ex) return err("Unknown example", 404)
       return new Response(await readFile(join(config.examplesDir, ex.file)), { headers: { "content-type": "application/json" } })
+    }
+
+    if (path === "/api/mesh" && method === "GET") return json(mesh.get())
+    if (path === "/api/mesh" && method === "POST") {
+      try {
+        const engine = await engines.detect()
+        if (!engine.active) return err("No openEMS engine available. Open the engine panel to download or select one.", 409)
+        const { sim, key } = await body<{ sim: SimInput; key?: string }>()
+        return json(mesh.start(sim, String(key ?? ""), engine))
+      } catch (e: any) {
+        return err(e?.message ?? String(e))
+      }
+    }
+    if (path === "/api/mesh" && method === "DELETE") {
+      mesh.stop()
+      return json(mesh.get())
+    }
+    if (path === "/api/mesh/pec" && method === "GET") {
+      const p = mesh.pecFile()
+      return p ? fileResponse(p, { "cache-control": "no-store" }) : err("No mesh has been built", 404)
     }
 
     if (path === "/api/jobs" && method === "GET") return json(jobs.listJobs())
@@ -122,5 +145,11 @@ export const createApp = (config: AppConfig) => {
     }
   }
 
-  return { handle, engines, jobs }
+  /** Terminates every engine process (called when the desktop app quits). */
+  const shutdown = () => {
+    jobs.killAll()
+    mesh.stop()
+  }
+
+  return { handle, engines, jobs, mesh, shutdown }
 }
