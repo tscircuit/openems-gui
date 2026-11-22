@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: mac-arm64, runner: macos-14, args: "--mac zip dmg --arm64" }
+          - { name: mac-arm64, runner: macos-15, args: "--mac zip dmg --arm64" }
           - { name: mac-x64, runner: macos-15-intel, args: "--mac zip dmg --x64" }
           - { name: linux-x64, runner: ubuntu-22.04, args: "--linux tar.gz AppImage --x64" }
           - { name: linux-arm64, runner: ubuntu-22.04-arm, args: "--linux tar.gz --arm64" }
