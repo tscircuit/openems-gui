@@ -95,11 +95,25 @@ export const unionBBox = (a: BBox, b: BBox): BBox => ({
 export const bboxIntersects = (a: BBox, b: BBox): boolean =>
   a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY
 
+const pointOnSegment = (p: Pt, a: Pt, b: Pt): boolean => {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy)
+  const scale = Math.max(1, Math.abs(p.x), Math.abs(p.y), Math.abs(a.x), Math.abs(a.y), Math.abs(b.x), Math.abs(b.y))
+  const tol = 1e-9 * scale
+  if (len < tol) return Math.hypot(p.x - a.x, p.y - a.y) <= tol
+  const distance = Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len
+  if (distance > tol) return false
+  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (len * len)
+  return t >= -1e-9 && t <= 1 + 1e-9
+}
+
 export const pointInPolygon = (p: Pt, poly: Pt[]): boolean => {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const a = poly[i]
     const b = poly[j]
+    if (pointOnSegment(p, a, b)) return true
     if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
   }
   return inside

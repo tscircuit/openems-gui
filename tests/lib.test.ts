@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { buildSimulation, defaultConfig, lateralGeom } from "../src/lib/build-sim"
 import { EXAMPLES } from "../src/lib/examples"
 import { extractPcbModel, normalizeCircuitJson, parseValue } from "../src/lib/extract"
-import { clipPolygonToRect, decomposeWithHoles, polygonArea, rectPoly, stadiumPoly } from "../src/lib/geom"
+import { clipPolygonToRect, decomposeWithHoles, pointInPolygon, polygonArea, rectPoly, stadiumPoly } from "../src/lib/geom"
 import { fillMesh, mergeLines } from "../src/lib/mesh"
 
 const load = async (file: string) => extractPcbModel(normalizeCircuitJson(await Bun.file(join(import.meta.dir, "../examples", file)).json()))
@@ -22,6 +22,17 @@ describe("geometry", () => {
   test("clip to rectangle", () => {
     const c = clipPolygonToRect(rectPoly(0, 0, 10, 2), { minX: -1, maxX: 1, minY: -5, maxY: 5 })
     expect(polygonArea(c)).toBeCloseTo(4, 9)
+  })
+  test("points on every polygon boundary count as inside", () => {
+    const poly = rectPoly(0, 0, 10, 10)
+    for (const p of [
+      { x: 0, y: -5 },
+      { x: 5, y: 0 },
+      { x: 0, y: 5 },
+      { x: -5, y: 0 },
+      { x: 5, y: 5 },
+    ])
+      expect(pointInPolygon(p, poly)).toBe(true)
   })
 })
 
